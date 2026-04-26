@@ -1,0 +1,8 @@
+paho-mqtt==2.1.0
+requests==2.32.3
+pyserial==3.5
+schedule==1.2.2
+cryptography==43.0.1
+pydantic==2.9.2
+structlog==24.4.0
+

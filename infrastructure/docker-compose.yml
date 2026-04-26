@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: adnexus-postgres
+    environment:
+      POSTGRES_DB: adnexus
+      POSTGRES_USER: adnexus
+      POSTGRES_PASSWORD: dev_password
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adnexus -d adnexus"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: adnexus-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  mqtt:
+    image: hivemq/hivemq4
+    container_name: adnexus-mqtt
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+      - "8080:8080"
+
+  api:
+    build:
+      context: ../apps/api
+    container_name: adnexus-api
+    environment:
+      DATABASE_URL: postgresql://adnexus:dev_password@postgres:5432/adnexus
+      REDIS_URL: redis://redis:6379
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+      JWT_SECRET: dev_secret_change_in_prod
+      PORT: 3000
+      AWS_S3_BUCKET: ""
+      AWS_CLOUDFRONT_DOMAIN: ""
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mqtt:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: ../apps/dashboard
+    container_name: adnexus-dashboard
+    environment:
+      REACT_APP_API_URL: http://localhost:3000/api/v1
+      REACT_APP_WS_URL: ws://localhost:3000
+    ports:
+      - "3001:80"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+
