@@ -20,12 +20,17 @@ const schedules_module_1 = require("./schedules/schedules.module");
 const proof_of_play_module_1 = require("./proof-of-play/proof-of-play.module");
 const mqtt_gateway_module_1 = require("./mqtt-gateway/mqtt-gateway.module");
 const websocket_gateway_module_1 = require("./websocket-gateway/websocket-gateway.module");
+const adnexus_module_1 = require("./adnexus/adnexus.module");
 const organization_entity_1 = require("./database/entities/organization.entity");
 const device_entity_1 = require("./database/entities/device.entity");
 const screen_entity_1 = require("./database/entities/screen.entity");
 const campaign_entity_1 = require("./database/entities/campaign.entity");
 const schedule_entity_1 = require("./database/entities/schedule.entity");
 const proof_of_play_entity_1 = require("./database/entities/proof-of-play.entity");
+const user_entity_1 = require("./adnexus/entities/user.entity");
+const screen_entity_2 = require("./adnexus/entities/screen.entity");
+const content_entity_1 = require("./adnexus/entities/content.entity");
+const schedule_entity_2 = require("./adnexus/entities/schedule.entity");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -44,7 +49,7 @@ exports.AppModule = AppModule = __decorate([
                     password: configService.get('DB_PASSWORD', 'dev_password'),
                     database: configService.get('DB_NAME', 'adnexus'),
                     autoLoadEntities: true,
-                    synchronize: false,
+                    synchronize: configService.get('TYPEORM_SYNC', 'true') === 'true',
                     entities: [
                         organization_entity_1.OrganizationEntity,
                         device_entity_1.DeviceEntity,
@@ -52,6 +57,10 @@ exports.AppModule = AppModule = __decorate([
                         campaign_entity_1.CampaignEntity,
                         schedule_entity_1.ScheduleEntity,
                         proof_of_play_entity_1.ProofOfPlayEntity,
+                        user_entity_1.UserEntity,
+                        screen_entity_2.ScreenEntity,
+                        content_entity_1.ContentEntity,
+                        schedule_entity_2.ScheduleEntity,
                     ],
                 }),
             }),
@@ -63,6 +72,7 @@ exports.AppModule = AppModule = __decorate([
             proof_of_play_module_1.ProofOfPlayModule,
             mqtt_gateway_module_1.MqttGatewayModule,
             websocket_gateway_module_1.WebsocketGatewayModule,
+            adnexus_module_1.AdNexusModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

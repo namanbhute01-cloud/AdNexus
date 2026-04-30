@@ -11,12 +11,17 @@ import { SchedulesModule } from './schedules/schedules.module';
 import { ProofOfPlayModule } from './proof-of-play/proof-of-play.module';
 import { MqttGatewayModule } from './mqtt-gateway/mqtt-gateway.module';
 import { WebsocketGatewayModule } from './websocket-gateway/websocket-gateway.module';
+import { AdNexusModule } from './adnexus/adnexus.module';
 import { OrganizationEntity } from './database/entities/organization.entity';
 import { DeviceEntity } from './database/entities/device.entity';
 import { ScreenEntity } from './database/entities/screen.entity';
 import { CampaignEntity } from './database/entities/campaign.entity';
 import { ScheduleEntity } from './database/entities/schedule.entity';
 import { ProofOfPlayEntity } from './database/entities/proof-of-play.entity';
+import { UserEntity as AdNexusUserEntity } from './adnexus/entities/user.entity';
+import { ScreenEntity as AdNexusScreenEntity } from './adnexus/entities/screen.entity';
+import { ContentEntity as AdNexusContentEntity } from './adnexus/entities/content.entity';
+import { ScheduleEntity as AdNexusScheduleEntity } from './adnexus/entities/schedule.entity';
 
 @Module({
   imports: [
@@ -32,7 +37,7 @@ import { ProofOfPlayEntity } from './database/entities/proof-of-play.entity';
         password: configService.get<string>('DB_PASSWORD', 'dev_password'),
         database: configService.get<string>('DB_NAME', 'adnexus'),
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: configService.get<string>('TYPEORM_SYNC', 'true') === 'true',
         entities: [
           OrganizationEntity,
           DeviceEntity,
@@ -40,6 +45,10 @@ import { ProofOfPlayEntity } from './database/entities/proof-of-play.entity';
           CampaignEntity,
           ScheduleEntity,
           ProofOfPlayEntity,
+          AdNexusUserEntity,
+          AdNexusScreenEntity,
+          AdNexusContentEntity,
+          AdNexusScheduleEntity,
         ],
       }),
     }),
@@ -51,6 +60,7 @@ import { ProofOfPlayEntity } from './database/entities/proof-of-play.entity';
     ProofOfPlayModule,
     MqttGatewayModule,
     WebsocketGatewayModule,
+    AdNexusModule,
   ],
   controllers: [AppController],
   providers: [AppService],

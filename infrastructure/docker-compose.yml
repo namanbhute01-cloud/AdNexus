@@ -59,8 +59,8 @@ services:
       context: ../apps/dashboard
     container_name: adnexus-dashboard
     environment:
-      REACT_APP_API_URL: http://localhost:3000/api/v1
-      REACT_APP_WS_URL: ws://localhost:3000
+      REACT_APP_API_URL: http://localhost:3000/api
+      REACT_APP_WS_URL: http://localhost:3000
     ports:
       - "3001:80"
     depends_on:
@@ -69,4 +69,3 @@ services:
 
 volumes:
   postgres_data:
-
