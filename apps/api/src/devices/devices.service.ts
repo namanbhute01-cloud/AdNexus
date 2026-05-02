@@ -35,7 +35,7 @@ export class DevicesService implements OnModuleInit {
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
-  async markStaleDevicesOffline() {
+  async markOfflineIfStale() {
     const threshold = new Date(Date.now() - 90_000); // 90 seconds
     const updatedResult = await this.devicesRepo.update(
       { lastHeartbeat: LessThan(threshold), status: DeviceStatus.ONLINE },

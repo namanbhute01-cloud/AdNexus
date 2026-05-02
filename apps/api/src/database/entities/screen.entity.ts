@@ -23,6 +23,9 @@ export class ScreenEntity {
   @Column({ name: 'display_info', type: 'jsonb', nullable: true })
   displayInfo?: Record<string, unknown> | null;
 
+  @Column({ name: 'password_hash', type: 'varchar', nullable: true })
+  passwordHash?: string | null;
+
   @Column({ name: 'current_campaign_id', type: 'uuid', nullable: true })
   currentCampaignId?: string | null;
 

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Put, UseGuards } from '@nestjs/com
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { DeviceCertGuard } from '../auth/device-cert.guard';
 import { ScreensService } from './screens.service';
 import { UpdateDisplayInfoDto } from './dto/update-display-info.dto';
 import * as bcrypt from 'bcrypt';

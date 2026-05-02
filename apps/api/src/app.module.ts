@@ -48,7 +48,7 @@ import { ScheduleEntity as AdNexusScheduleEntity } from './adnexus/entities/sche
         password: configService.get<string>('DB_PASSWORD', 'dev_password'),
         database: configService.get<string>('DB_NAME', 'adnexus'),
         autoLoadEntities: true,
-        synchronize: configService.get<string>('TYPEORM_SYNC', 'true') === 'true',
+        synchronize: false,
         entities: [
           OrganizationEntity,
           DeviceEntity,

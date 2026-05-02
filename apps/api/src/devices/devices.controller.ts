@@ -3,6 +3,7 @@ import { DevicesService } from './devices.service';
 import { DeviceCertGuard } from '../auth/device-cert.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HeartbeatDto } from './dto/heartbeat.dto';
+import { Cron, CronExpression } from "@nestjs/schedule";
 
 @Controller('devices')
 export class DevicesController {
@@ -16,7 +17,7 @@ export class DevicesController {
 
   @Post(':id/reconcile-offline')
   @UseGuards(JwtAuthGuard)
-  markOfflineSweep() {
+  markOfflineIfStale() {
     return this.devicesService.markOfflineIfStale();
   }
 }
