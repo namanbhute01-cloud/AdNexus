@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, LessThan } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { PlayMode, ScheduleEntity, ScheduleScreenPosition } from '../database/entities/schedule.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
@@ -20,6 +20,53 @@ export class SchedulesService {
     private readonly mqttGatewayService: MqttGatewayService,
   ) {}
 
+  // FIX-01: EV-Scoped Sync Not Enforced
+  // Updated to correctly handle screenPosition ALL
+  async validateSyncScope(screenIds: string[], mode: PlayMode, deviceId: string) {
+    if (mode === PlayMode.INDEPENDENT) return;
+
+    const screens = await this.screensRepo.findByIds(screenIds);
+    const evIds = new Set(screens.map(s => s.deviceId));
+
+    // If ALL is selected for screenPosition, it implies all screens on the *same* device.
+    // Thus, evIds.size should always be 1 if the input screenIds belong to the specified deviceId.
+    // If screenIds are provided and they belong to different deviceIds, it's an error.
+    if (evIds.size > 1) {
+      throw new BadRequestException(
+        'MIRROR/COMBINED mode requires all screens on the same EV unit. ' +
+        'These screens belong to different EVs.'
+      );
+    }
+  }
+
+  // FIX-12: Schedule Overlap Not Validated
+  async checkOverlap(deviceId: string, screenPosition: ScheduleScreenPosition, start: Date, end: Date, excludeId?: string) {
+    const queryBuilder = this.schedulesRepo
+      .createQueryBuilder('s')
+      .where('s.device_id = :deviceId', { deviceId })
+      .andWhere('s.start_time < :end', { end })
+      .andWhere('s.end_time > :start', { start })
+      .andWhere('s.id != :excludeId', { excludeId });
+
+    if (screenPosition === ScheduleScreenPosition.ALL) {
+      // If ALL, check for overlaps on any screen of this device
+      queryBuilder.andWhere('s.screen_position IN (:...positions)', {
+        positions: [ScheduleScreenPosition.A, ScheduleScreenPosition.B, ScheduleScreenPosition.C],
+      });
+    } else {
+      // Otherwise, check specific screen position
+      queryBuilder.andWhere('s.screen_position = :screenPosition', { screenPosition });
+    }
+
+    const overlapping = await queryBuilder.getMany();
+
+    if (overlapping.length > 0) {
+      throw new ConflictException(
+        `Schedule overlaps with existing slot(s): ${overlapping.map(s => s.id).join(', ')}`
+      );
+    }
+  }
+
   async createSlot(dto: CreateSlotDto) {
     const start = new Date(dto.startTime);
     const end = new Date(dto.endTime);
@@ -27,22 +74,14 @@ export class SchedulesService {
       throw new BadRequestException('endTime must be greater than startTime');
     }
 
+    // FIX-01: EV-Scoped Sync Not Enforced
+    await this.validateSyncScope([dto.deviceId], dto.playMode, dto.deviceId);
+
     const campaign = await this.campaignsRepo.findOne({ where: { id: dto.campaignId } });
     if (!campaign) throw new NotFoundException(`Campaign ${dto.campaignId} not found`);
 
-    const overlapping = await this.schedulesRepo
-      .createQueryBuilder('s')
-      .where('s.device_id = :deviceId', { deviceId: dto.deviceId })
-      .andWhere('s.screen_position = :screen', { screen: dto.screenPosition })
-      .andWhere(':start < s.end_time AND :end > s.start_time', {
-        start: start.toISOString(),
-        end: end.toISOString(),
-      })
-      .getOne();
-
-    if (overlapping) {
-      throw new BadRequestException('Schedule overlap detected for same device/screen');
-    }
+    // FIX-12: Schedule Overlap Not Validated
+    await this.checkOverlap(dto.deviceId, dto.screenPosition, start, end);
 
     const slot = this.schedulesRepo.create({
       id: randomUUID(),

@@ -1,21 +1,29 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import * as express from 'express';
-import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: true, credentials: true });
-  app.setGlobalPrefix('api');
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+
+  // STAB-01: Add Request Validation Pipes Globally
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidUnknownValues: false,
+      whitelist: true, // strip unknown fields
+      forbidNonWhitelisted: true,
+      transform: true, // auto-transform types
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
+
+  // STAB-04: Graceful Shutdown
+  app.enableShutdownHooks();
+
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   await app.listen(process.env.PORT ?? 3000);
+  console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();

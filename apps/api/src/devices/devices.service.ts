@@ -7,18 +7,19 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { DeviceEntity, DeviceStatus } from '../database/entities/device.entity';
 import { MqttGatewayService } from '../mqtt-gateway/mqtt-gateway.service';
 import { HeartbeatDto } from './dto/heartbeat.dto';
 import { LiveGateway } from '../websocket-gateway/live.gateway';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class DevicesService implements OnModuleInit {
   private readonly logger = new Logger(DevicesService.name);
-  private staleSweepTimer?: NodeJS.Timeout;
+  // private staleSweepTimer?: NodeJS.Timeout; // No longer needed with @Cron
 
   constructor(
     @InjectRepository(DeviceEntity)
@@ -30,9 +31,37 @@ export class DevicesService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.staleSweepTimer = setInterval(() => {
-      void this.markOfflineIfStale();
-    }, 60_000);
+    // clearInterval(this.staleSweepTimer); // No longer needed with @Cron
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async markStaleDevicesOffline() {
+    const threshold = new Date(Date.now() - 90_000); // 90 seconds
+    const updatedResult = await this.devicesRepo.update(
+      { lastHeartbeat: LessThan(threshold), status: DeviceStatus.ONLINE },
+      { status: DeviceStatus.OFFLINE }
+    );
+
+    if (updatedResult.affected && updatedResult.affected > 0) {
+      // Fetch the updated devices to emit WebSocket events
+      const updatedDevices = await this.devicesRepo.find({
+        where: { lastHeartbeat: LessThan(threshold), status: DeviceStatus.OFFLINE },
+      });
+
+      updatedDevices.forEach((device) => {
+        this.liveGateway.emitDeviceStatus({
+          device_id: device.id,
+          status: DeviceStatus.OFFLINE,
+          last_heartbeat: device.lastHeartbeat ?? null,
+        });
+        this.liveGateway.emitFleetAlert({
+          type: 'HEARTBEAT_MISSED',
+          device_id: device.id,
+          serial_number: device.serialNumber,
+        });
+      });
+    }
+    this.logger.log(`Marked ${updatedResult.affected ?? 0} devices offline.`);
   }
 
   async registerDevice(serial: string, organizationId: string, _cert: string) {
@@ -75,38 +104,6 @@ export class DevicesService implements OnModuleInit {
       last_heartbeat: device.lastHeartbeat,
     });
     return { ok: true };
-  }
-
-  async markOfflineIfStale() {
-    const staleCutoff = new Date(Date.now() - 90_000);
-    const staleDevices = await this.devicesRepo
-      .createQueryBuilder('d')
-      .where('d.last_heartbeat IS NULL OR d.last_heartbeat < :cutoff', { cutoff: staleCutoff })
-      .andWhere('d.status <> :offline', { offline: DeviceStatus.OFFLINE })
-      .getMany();
-
-    if (staleDevices.length === 0) {
-      return { updated: 0 };
-    }
-
-    for (const device of staleDevices) {
-      device.status = DeviceStatus.OFFLINE;
-    }
-    await this.devicesRepo.save(staleDevices);
-
-    staleDevices.forEach((device) => {
-      this.liveGateway.emitDeviceStatus({
-        device_id: device.id,
-        status: DeviceStatus.OFFLINE,
-        last_heartbeat: device.lastHeartbeat ?? null,
-      });
-      this.liveGateway.emitFleetAlert({
-        type: 'HEARTBEAT_MISSED',
-        device_id: device.id,
-        serial_number: device.serialNumber,
-      });
-    });
-    return { updated: staleDevices.length };
   }
 
   async sendCommand(deviceId: string, command: string, payload: Record<string, unknown> = {}) {

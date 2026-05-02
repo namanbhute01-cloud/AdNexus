@@ -26,5 +26,15 @@ export class ScreensService {
     await this.screensRepo.save(screen);
     return screen;
   }
+
+  async updatePassword(screenId: string, passwordHash: string) {
+    const screen = await this.screensRepo.findOne({ where: { id: screenId } });
+    if (!screen) {
+      throw new NotFoundException(`Screen ${screenId} not found`);
+    }
+    screen.passwordHash = passwordHash;
+    await this.screensRepo.save(screen);
+    return screen;
+  }
 }
 

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -12,6 +15,7 @@ import { ProofOfPlayModule } from './proof-of-play/proof-of-play.module';
 import { MqttGatewayModule } from './mqtt-gateway/mqtt-gateway.module';
 import { WebsocketGatewayModule } from './websocket-gateway/websocket-gateway.module';
 import { AdNexusModule } from './adnexus/adnexus.module';
+import { RolesGuard } from './auth/roles.guard';
 import { OrganizationEntity } from './database/entities/organization.entity';
 import { DeviceEntity } from './database/entities/device.entity';
 import { ScreenEntity } from './database/entities/screen.entity';
@@ -26,6 +30,13 @@ import { ScheduleEntity as AdNexusScheduleEntity } from './adnexus/entities/sche
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -63,6 +74,16 @@ import { ScheduleEntity as AdNexusScheduleEntity } from './adnexus/entities/sche
     AdNexusModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
