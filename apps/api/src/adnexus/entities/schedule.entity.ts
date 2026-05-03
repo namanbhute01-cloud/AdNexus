@@ -10,7 +10,7 @@ import { PlaybackMode } from '../adnexus.types';
 import { ContentEntity } from './content.entity';
 import { UserEntity } from './user.entity';
 
-@Entity('adnexus_schedules')
+@Entity('schedules')
 export class ScheduleEntity {
   @PrimaryColumn('uuid')
   id!: string;

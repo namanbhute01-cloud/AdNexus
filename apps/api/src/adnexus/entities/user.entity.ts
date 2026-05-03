@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { AdNexusRole } from '../adnexus.types';
 
-@Entity('adnexus_users')
+@Entity('users')
 export class UserEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

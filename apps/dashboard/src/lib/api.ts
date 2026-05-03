@@ -2,7 +2,7 @@ import axios from 'axios';
 import { mockCampaigns, mockDevices, mockFleetStats, mockScreens, mockSchedule } from '../data/mock';
 import { Campaign, Device, FleetStats, ScreenPreviewData, ScheduleSlot } from '../types';
 
-const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3000/api/v1';
 
 export const api = axios.create({
   baseURL: apiBase,

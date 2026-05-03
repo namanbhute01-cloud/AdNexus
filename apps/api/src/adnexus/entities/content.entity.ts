@@ -9,7 +9,7 @@ import {
 import { ContentType } from '../adnexus.types';
 import { UserEntity } from './user.entity';
 
-@Entity('adnexus_content')
+@Entity('content')
 export class ContentEntity {
   @PrimaryColumn('uuid')
   id!: string;

@@ -9,7 +9,7 @@ import {
 import { ContentType, ScreenStatus } from '../adnexus.types';
 import { UserEntity } from './user.entity';
 
-@Entity('adnexus_screens')
+@Entity('screens')
 export class ScreenEntity {
   @PrimaryColumn('uuid')
   id!: string;

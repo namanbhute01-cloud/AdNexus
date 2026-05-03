@@ -1,0 +1,7 @@
+{
+  "name": "adnexus-root",
+  "version": "1.0.0",
+  "scripts": {
+    "start:all": "node start.js"
+  }
+}

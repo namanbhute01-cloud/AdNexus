@@ -157,3 +157,20 @@ VALUES
     '{"type":"Projector","resolution":"1920x1080","refresh_rate":60,"aspect_ratio":"16:9"}'
   )
 ON CONFLICT (id) DO NOTHING;
+
+CREATE TYPE user_role AS ENUM ('ADMIN', 'CAMPAIGNER', 'SCREEN');
+
+CREATE TABLE IF NOT EXISTS users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  username      VARCHAR(100) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role          user_role NOT NULL DEFAULT 'CAMPAIGNER',
+  screen_id     UUID REFERENCES screens(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
+CREATE INDEX IF NOT EXISTS idx_sched_device   ON schedules(device_id, start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_pop_device     ON proof_of_play(device_id, played_at);
+CREATE INDEX IF NOT EXISTS idx_users_role     ON users(role);
