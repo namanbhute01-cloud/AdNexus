@@ -1,12 +1,15 @@
 {
   "name": "@vaart/storage",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Storage drivers for AdNexus: R2 helpers, private gallery quarantine, and approved-media promotion.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -15,6 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
 }

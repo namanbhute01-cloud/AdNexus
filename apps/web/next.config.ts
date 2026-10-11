@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import path from "node:path";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@vaart/database"],
+  transpilePackages: ["@vaart/database", "@vaart/storage"],
   allowedDevOrigins: ["192.168.29.82"],
   turbopack: {
     // Pin the Turbopack root to the monorepo root so the linked @vaart/database

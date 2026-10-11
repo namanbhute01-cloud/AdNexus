@@ -178,3 +178,62 @@ model AppSetting {
   value     String
   updatedAt DateTime @default(now())
 }
+
+// ---------------------------------------------------------------------------
+// Community Gallery (additive only — no existing model above is modified).
+// Anonymous students submit photos; the admin approves them into the existing
+// Media -> CampaignMedia -> ScreenAssignment -> player pipeline.
+// ---------------------------------------------------------------------------
+
+enum GalleryPhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REMOVED
+}
+
+model GalleryEvent {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  name               String
+  campaignId         String
+  isOpen             Boolean  @default(true)
+  maxFilesPerRequest Int      @default(5)
+  maxFileBytes       Int      @default(10485760)
+  maxPending         Int      @default(500)
+  perTokenCap        Int      @default(30)
+  displaySeconds     Int      @default(8)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  photos GalleryPhoto[]
+}
+
+model GalleryPhoto {
+  id              String             @id @default(cuid())
+  eventId         String
+  event           GalleryEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status          GalleryPhotoStatus @default(PENDING)
+
+  storageKey      String
+  thumbKey        String
+  width           Int
+  height          Int
+  sizeBytes       Int
+  sha256          String
+
+  contributorName String?
+  caption         String?
+  consentAt       DateTime
+  ipHash          String
+  createdAt       DateTime           @default(now())
+
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectReason    String?
+  mediaId         String?            @unique
+  campaignMediaId String?            @unique
+
+  @@unique([eventId, sha256])
+  @@index([eventId, status, createdAt])
+}

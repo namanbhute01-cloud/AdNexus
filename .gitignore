@@ -3,3 +3,7 @@ node_modules/
 .next/
 dist/
 .env
+
+# Community Gallery: unapproved submissions quarantine (never commit student photos)
+.data/
+**/.data/
