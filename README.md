@@ -82,6 +82,59 @@ sudo -u postgres psql -c "CREATE DATABASE vaarte OWNER postgres;"
 > The script reuses an existing `naarte` or `vaarte` database if one is
 > present, so it will not orphan data by inventing a second database name.
 
+## Community Gallery
+
+Students scan a QR code and upload photos **without an account**. Every
+submission lands in private quarantine and is invisible to everyone — including
+other students — until an authenticated admin approves it. Approved photos play
+on the screens through the existing campaign → screen-assignment → player
+pipeline, unchanged.
+
+Built for the Navaratri college event. Built on this CMS; the player, campaigns,
+assignments and media library are all reused as-is.
+
+| Path | Who | What |
+| --- | --- | --- |
+| `/contribute/<slug>` | public | QR landing page and upload form (no login) |
+| `/admin/gallery` | admin | Events, QR code generation |
+| `/admin/gallery/<id>` | admin | Moderation grid, Pause/Resume, bulk actions |
+| `/admin/gallery/<id>/review` | admin | Full-screen review: `A` approve, `R` reject, `Z` undo |
+
+Campaigner/client sign-in is disabled; only `ADMIN` accounts can authenticate.
+The `CAMPAIGNER` role and its rows remain in the database.
+
+### Gallery environment
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `GALLERY_TOKEN_SECRET` | yes | Signs 6-hour upload tokens (`openssl rand -hex 32`) |
+| `GALLERY_IP_SALT` | yes | HMAC key for IP hashing — raw IPs are never stored |
+| `PUBLIC_BASE_URL` | yes | Origin printed in the QR code |
+| `TRUST_CF_HEADER` | no | `true` only when reachable solely through Cloudflare |
+| `GALLERY_PRIVATE_DIR` | no | Defaults to `apps/web/.data/gallery` |
+
+### Gallery commands
+
+```bash
+pnpm --filter web test:gallery      # unit + integration
+pnpm --filter web exec tsx tests/gallery/image-pipeline.test.ts
+pnpm --filter web smoke:gallery     # end-to-end (needs a running server)
+pnpm --filter web authz:sweep       # auth posture of every /api route
+
+cd packages/database
+npx tsx scripts/create-gallery-event.ts --slug navaratri-2026 \
+  --name "Navaratri 2026" --campaignId <id>
+```
+
+> Always apply migrations with `prisma migrate deploy`. `prisma migrate dev`
+> will try to reset the database — see "Known repo issues" below.
+
+📖 **Start here:** [`docs/gallery/RUNBOOK.md`](docs/gallery/RUNBOOK.md) —
+setup, event-day checklist, troubleshooting and teardown.
+Design rationale is in [`docs/gallery/`](docs/gallery/).
+
+---
+
 ## Default logins
 
 Seeded by `packages/database/prisma/seed.ts` — **development only**, change them
@@ -91,6 +144,12 @@ before deploying anywhere real.
 | ----------- | -------------------- | ------------- |
 | Admin       | `admin@vaart.com`    | `Admin@123`   |
 | Campaigner  | `client@example.com` | `Client@123`  |
+
+**These exist only when `NODE_ENV !== "production"`.** In production the seed
+creates no default accounts and bootstraps an admin from `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` instead. Campaigner sign-in is disabled entirely — only
+`ADMIN` can authenticate, though the `CAMPAIGNER` role and its rows remain in
+the database.
 
 The seed also creates EV `NRT-EV-001` ("MG Road, Bangalore") with three TVs
 (`NRT-EV-001-TV1` … `TV3`) and grants the campaigner access to it.
@@ -206,7 +265,13 @@ These are pre-existing and worth knowing about before you touch the database:
    but **`prisma migrate dev` will want to reset the database** and wipe data.
    Prefer `migrate deploy` until this is reconciled.
 
-2. **`Media.sizeBytes` drift.** The column is `bigint` in existing databases but
+2. **Files written to `public/` while the server is running are not served.**
+   Next.js snapshots the `public/` directory at **server start**, so a file
+   written afterwards returns 404 until the next restart. This affects
+   `/api/media/local-upload`. Community Gallery media is served through
+   `/media/[...path]` instead and is unaffected.
+
+3. **`Media.sizeBytes` drift.** The column is `bigint` in existing databases but
    `Int` in `schema.prisma`. The schema is deliberately left as `Int`: changing
    it to `BigInt` makes Prisma return native `BigInt` objects, which throw
    `TypeError: Do not know how to serialize a BigInt` when
