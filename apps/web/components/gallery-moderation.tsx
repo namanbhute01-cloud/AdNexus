@@ -32,6 +32,48 @@ type Stats = {
   intakeFull: boolean
 }
 
+/**
+ * Two short beeps via the Web Audio API — no asset to ship, and no autoplay
+ * problem because it only runs after an admin click has enabled sound.
+ */
+function playChime() {
+  try {
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) return
+    const ctx = new Ctor()
+    const now = ctx.currentTime
+    for (const [index, freq] of [880, 1175].entries()) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = "sine"
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, now + index * 0.14)
+      gain.gain.linearRampToValueAtTime(0.16, now + index * 0.14 + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.14 + 0.3)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(now + index * 0.14)
+      osc.stop(now + index * 0.14 + 0.32)
+    }
+    setTimeout(() => void ctx.close(), 900)
+  } catch {
+    /* sound is a nicety; never let it break moderation */
+  }
+}
+
+/** Desktop notification, if the admin has granted permission. */
+function notify(title: string, body: string) {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return
+    const n = new Notification(title, { body, tag: "gallery", icon: "/favicon.ico" })
+    n.onclick = () => {
+      window.focus()
+      n.close()
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 type Event = {
   id: string
   slug: string
@@ -69,9 +111,16 @@ export function GalleryModeration({ event, publicBaseUrl }: { event: Event; publ
   // Which tab has finished loading. Deriving `loading` from this instead of a
   // separate boolean keeps the tab-change effect free of synchronous setState.
   const [loadedTab, setLoadedTab] = useState<Status | null>(null)
+  const [soundOn, setSoundOn] = useState(false)
+  const notificationState =
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
 
   // Prefetch the next images so the review grid and full-screen mode feel instant.
   const preloaded = useRef(new Set<string>())
+  // Last pending count we saw. New photos are signalled by a RISE in this, so
+  // the admin's own actions never trigger a notification.
+  const lastPendingRef = useRef(0)
+  const soundOnRef = useRef(false)
 
 
   // Fetch a page of photos. `no-store` matters: these are private files behind
@@ -109,7 +158,31 @@ export function GalleryModeration({ event, publicBaseUrl }: { event: Event; publ
       cancelled = true
       clearInterval(id)
     }
+
+    /**
+     * Warn the admin when the queue grows. Only on an INCREASE, and only after
+     * the first reading, so opening the page on a pre-filled queue stays quiet.
+     */
   }, [event.id])
+
+  useEffect(() => {
+    if (!stats) return
+    const previous = lastPendingRef.current
+    const grew = stats.pending - previous
+    lastPendingRef.current = stats.pending
+    if (previous === 0 || grew <= 0) return
+
+    if (soundOnRef.current) playChime()
+    notify(
+      `${stats.pending} photo${stats.pending === 1 ? "" : "s"} waiting`,
+      grew === 1 ? "1 new submission" : `${grew} new submissions`,
+    )
+    if (document.visibilityState === "visible") {
+      toast(`📸 ${grew === 1 ? "New photo" : `${grew} new photos`} waiting for review`, {
+        description: event.name,
+      })
+    }
+  }, [stats, event.name])
 
   // Pending count drives the browser tab title so the admin notices new
   // submissions even when this tab is in the background.
@@ -230,6 +303,41 @@ export function GalleryModeration({ event, publicBaseUrl }: { event: Event; publ
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              soundOnRef.current = !soundOnRef.current
+              setSoundOn(soundOnRef.current)
+              if (soundOnRef.current) playChime()
+              toast.success(soundOnRef.current ? "Alert sound on" : "Alert sound off")
+            }}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+              soundOn
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : "border-slate-200 hover:bg-slate-50"
+            }`}
+            title="Play a sound when new photos arrive"
+          >
+            {soundOn ? "🔔 Sound on" : "🔕 Sound off"}
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              if (typeof Notification === "undefined") {
+                toast.error("This browser has no notification support")
+                return
+              }
+              const result = await Notification.requestPermission()
+              if (result === "granted") toast.success("Desktop notifications on")
+              else toast.error("Notifications blocked in browser settings")
+            }}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+            title="Get a desktop notification when photos arrive"
+          >
+            {notificationState === "granted" ? "🔔 Desktop on" : "🔕 Desktop off"}
+          </button>
+
           <Link
             href={`/admin/gallery/${event.id}/review`}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50"

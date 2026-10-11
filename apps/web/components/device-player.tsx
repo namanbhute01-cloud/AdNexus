@@ -31,6 +31,9 @@ const DUCKED_AMBIENT_VOLUME = 0.2;
  */
 const CONTENT_POLL_MS = 15_000;
 
+/** Events that count as a real user gesture for autoplay unlock. */
+const POINTER_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
+
 export function DevicePlayer() {
   const params = useSearchParams();
   const serial = params.get("serial");
@@ -43,6 +46,7 @@ export function DevicePlayer() {
   const primaryMediaRef = useRef<HTMLMediaElement | null>(null);
   const [audioUnlockNeeded, setAudioUnlockNeeded] = useState(false);
   const lastPlaylistRef = useRef<string | null>(null);
+  const unmuteArmed = useRef<Set<HTMLMediaElement>>(new Set());
 
   const channelName = useMemo(
     () => (serial && subSerial ? `tv-${serial}-${subSerial}` : null),
@@ -63,6 +67,16 @@ export function DevicePlayer() {
   );
 
   const currentPrimary = primaryItems.length ? primaryItems[primaryIndex % primaryItems.length] : null;
+
+  /**
+   * Does this item actually need audio? An IMAGE never does, so the unlock
+   * gate must never cover one — that was the bug in AUDIT F12.
+   */
+  const needsAudio = (item: PlaylistItem | null) =>
+    Boolean(item && item.type !== "IMAGE" && item.volumePercent > 0);
+
+  const audioGateVisible =
+    audioUnlockNeeded && (needsAudio(currentPrimary) || needsAudio(currentAmbient));
   const hasAudioMedia = useMemo(
     () => playlist.some((item) => item.type === "AUDIO" || item.type === "VIDEO"),
     [playlist],
@@ -194,6 +208,19 @@ export function DevicePlayer() {
     element.volume = ducked ? baseVolume * DUCKED_AMBIENT_VOLUME : baseVolume;
   }
 
+  /**
+   * Try to start media, degrading to MUTED rather than giving up.
+   *
+   * Browsers block autoplay with sound until the user interacts with the page.
+   * The old behaviour treated that as a hard failure and raised a full-screen
+   * "Tap to start playback with audio" gate — which sat ON TOP of the gallery
+   * photos, so an event screen showed a blocking overlay instead of student
+   * pictures (AUDIT F12).
+   *
+   * Now: play muted, keep playing, and quietly restore sound on the first
+   * genuine user gesture. A display screen must never be blocked by an audio
+   * policy it cannot click through.
+   */
   async function tryStartMedia(
     element: HTMLMediaElement | null,
     kind: "ambient" | "primary",
@@ -201,12 +228,42 @@ export function DevicePlayer() {
     if (!element) return;
     try {
       await element.play();
-      setAudioUnlockNeeded(false);
+      if (!element.muted && element.volume > 0) setAudioUnlockNeeded(false);
+      return;
     } catch {
-      if (kind === "ambient" || element.volume > 0) {
-        setAudioUnlockNeeded(true);
-        setStatus("Audio blocked by browser policy");
+      // Blocked with sound. Retry muted so the video still plays.
+      try {
+        element.muted = true;
+        await element.play();
+        setAudioUnlockNeeded(false);
+        armUnmuteOnGesture(element);
+      } catch {
+        // Even muted playback failed (no data / bad URL) — nothing to show.
+        if (kind === "ambient" || element.volume > 0) {
+          setAudioUnlockNeeded(true);
+          setStatus("Playback blocked");
+        }
       }
+    }
+  }
+
+  /** Restore sound the first time a real user gesture happens. */
+  function armUnmuteOnGesture(element: HTMLMediaElement) {
+    if (unmuteArmed.current.has(element)) return;
+    unmuteArmed.current.add(element);
+
+    const restore = async () => {
+      element.muted = false;
+      try {
+        await element.play();
+        setAudioUnlockNeeded(false);
+      } catch {
+        element.muted = true;
+      }
+    };
+
+    for (const event of POINTER_EVENTS) {
+      window.addEventListener(event, restore, { once: true, passive: true });
     }
   }
 
@@ -224,13 +281,19 @@ export function DevicePlayer() {
     return () => applyAmbientVolume(currentAmbient, false);
   }, [currentAmbient, currentPrimary]);
 
+  /**
+   * One start attempt per item change, not per render. `tryStartMedia` is a
+   * fresh closure each render, so it is deliberately not a dependency — adding
+   * it would restart playback on every keystroke-sized state change.
+   */
+  const ambientId = currentAmbient?.id;
+  const primaryId = currentPrimary?.id;
   useEffect(() => {
     void tryStartMedia(ambientMediaRef.current, "ambient");
-  }, [currentAmbient?.id]);
-
+  }, [ambientId]);
   useEffect(() => {
     void tryStartMedia(primaryMediaRef.current, "primary");
-  }, [currentPrimary?.id]);
+  }, [primaryId]);
 
   if (!serial || !subSerial) {
     return (
@@ -333,7 +396,7 @@ export function DevicePlayer() {
         )}
       </div>
 
-      {audioUnlockNeeded ? (
+      {audioGateVisible ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45 p-6 backdrop-blur-sm">
           <button
             type="button"
@@ -350,13 +413,13 @@ export function DevicePlayer() {
             </span>
             <span className="mt-3 block text-2xl font-semibold">Start playback with audio</span>
             <span className="mt-2 block text-sm text-slate-300">
-              Browser blocked autoplay. Tap once to enable video sound.
+              This browser blocked sound. Tap once to enable it.
             </span>
           </button>
         </div>
       ) : null}
 
-      {!audioUnlockNeeded && hasAudioMedia ? (
+      {!audioGateVisible && hasAudioMedia ? (
         <button
           type="button"
           className="absolute left-4 top-4 z-20 rounded-full border border-white/20 bg-black/55 px-4 py-2 text-xs tracking-[0.2em] text-white backdrop-blur"

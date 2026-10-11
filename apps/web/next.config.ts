@@ -3,7 +3,7 @@ import path from "node:path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@vaart/database", "@vaart/storage"],
-  allowedDevOrigins: ["192.168.29.82"],
+  allowedDevOrigins: ["192.168.29.82", "10.220.174.95", "100.98.132.103"],
   turbopack: {
     // Pin the Turbopack root to the monorepo root so the linked @vaart/database
     // package resolves. Without this, Next infers the workspace root from any
