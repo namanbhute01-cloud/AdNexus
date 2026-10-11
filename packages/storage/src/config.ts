@@ -8,11 +8,18 @@
  * "degrades gracefully" behaviour the base product already relies on.
  */
 
+/**
+ * Structural env shape. Narrower than `NodeJS.ProcessEnv`, which Next.js'
+ * ambient types inflate to require `NODE_ENV` — `process.env` still satisfies
+ * it, and tests can pass a literal object without ceremony.
+ */
+export type EnvLike = Record<string, string | undefined>
+
 export function isConfigured(value: string | undefined | null): boolean {
   return Boolean(value && value.trim() && value.trim() !== "dummy")
 }
 
-export function hasR2Config(env: NodeJS.ProcessEnv = process.env): boolean {
+export function hasR2Config(env: EnvLike = process.env): boolean {
   return (
     isConfigured(env.R2_ACCOUNT_ID) &&
     isConfigured(env.R2_ACCESS_KEY_ID) &&
@@ -22,7 +29,7 @@ export function hasR2Config(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** Public base URL for R2-served objects, or null when R2 is not usable. */
-export function getR2PublicBase(env: NodeJS.ProcessEnv = process.env): string | null {
+export function getR2PublicBase(env: EnvLike = process.env): string | null {
   if (!hasR2Config(env)) return null
   const base = env.R2_PUBLIC_URL?.trim()
   return base && base !== "dummy" ? base.replace(/\/$/, "") : null

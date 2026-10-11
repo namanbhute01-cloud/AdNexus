@@ -15,7 +15,7 @@ const dirs: string[] = []
 async function makeStore(): Promise<{ store: PrivateStore; baseDir: string }> {
   const baseDir = await mkdtemp(path.join(tmpdir(), "gallery-private-"))
   dirs.push(baseDir)
-  const store = createPrivateStore({ GALLERY_PRIVATE_DIR: baseDir } as NodeJS.ProcessEnv)
+  const store = createPrivateStore({ GALLERY_PRIVATE_DIR: baseDir })
   assert.equal(store.driver, "local")
   return { store, baseDir }
 }
@@ -110,7 +110,7 @@ describe("key validation rejects traversal", () => {
 
 describe("driver selection", () => {
   it("uses local disk when R2 is not configured", () => {
-    const store = createPrivateStore({} as NodeJS.ProcessEnv)
+    const store = createPrivateStore({})
     assert.equal(store.driver, "local")
   })
 
@@ -120,7 +120,7 @@ describe("driver selection", () => {
       R2_ACCESS_KEY_ID: "dummy",
       R2_SECRET_ACCESS_KEY: "dummy",
       R2_BUCKET_NAME: "dummy",
-    } as NodeJS.ProcessEnv)
+    })
     assert.equal(store.driver, "local")
   })
 
@@ -130,20 +130,20 @@ describe("driver selection", () => {
       R2_ACCESS_KEY_ID: "key",
       R2_SECRET_ACCESS_KEY: "secret",
       R2_BUCKET_NAME: "bucket",
-    } as NodeJS.ProcessEnv)
+    })
     assert.equal(store.driver, "r2")
   })
 })
 
 describe("private directory default", () => {
   it("defaults to <cwd>/.data/gallery, never under public/", () => {
-    const dir = resolvePrivateDir({} as NodeJS.ProcessEnv)
+    const dir = resolvePrivateDir({})
     assert.equal(dir, path.resolve(process.cwd(), ".data", "gallery"))
     assert.equal(dir.includes(`${path.sep}public${path.sep}`), false)
   })
 
   it("honours GALLERY_PRIVATE_DIR", () => {
-    const dir = resolvePrivateDir({ GALLERY_PRIVATE_DIR: "/tmp/somewhere-else" } as NodeJS.ProcessEnv)
+    const dir = resolvePrivateDir({ GALLERY_PRIVATE_DIR: "/tmp/somewhere-else" })
     assert.equal(dir, "/tmp/somewhere-else")
   })
 })

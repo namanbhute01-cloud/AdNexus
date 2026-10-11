@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import sharp from "sharp"
+import sharp, { type Metadata } from "sharp"
 
 // One thread per worker process. sharp's default is libvips' own core count,
 // which on a laptop with 8+ cores means a single upload can saturate the box
@@ -140,7 +140,7 @@ export async function processUpload(buffer: Buffer): Promise<ProcessUploadResult
   }
 
   return withSemaphore(async () => {
-    let metadata: sharp.Metadata
+    let metadata: Metadata
     try {
       metadata = await basePipeline(buffer).metadata()
     } catch (error) {

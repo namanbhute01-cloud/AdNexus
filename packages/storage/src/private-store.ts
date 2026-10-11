@@ -6,7 +6,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3"
-import { hasR2Config } from "./config"
+import { hasR2Config, type EnvLike } from "./config"
 
 /**
  * Private (quarantine) storage for unapproved community-gallery submissions.
@@ -52,7 +52,7 @@ function assertKey(key: string): string {
 // Local driver
 // ---------------------------------------------------------------------------
 
-export function resolvePrivateDir(env: NodeJS.ProcessEnv = process.env): string {
+export function resolvePrivateDir(env: EnvLike = process.env): string {
   const configured = env.GALLERY_PRIVATE_DIR?.trim()
   return path.resolve(configured && configured !== "dummy" ? configured : path.join(process.cwd(), ".data", "gallery"))
 }
@@ -102,7 +102,7 @@ class R2PrivateStore implements PrivateStore {
   private readonly client: S3Client
   private readonly bucket: string
 
-  constructor(env: NodeJS.ProcessEnv) {
+  constructor(env: EnvLike) {
     this.bucket = env.R2_BUCKET_NAME as string
     this.client = new S3Client({
       region: "auto",
@@ -156,12 +156,12 @@ function contentTypeFor(key: string): string {
 
 let cached: PrivateStore | null = null
 
-export function createPrivateStore(env: NodeJS.ProcessEnv = process.env): PrivateStore {
+export function createPrivateStore(env: EnvLike = process.env): PrivateStore {
   if (hasR2Config(env)) return new R2PrivateStore(env)
   return new LocalPrivateStore(resolvePrivateDir(env))
 }
 
-export function getPrivateStore(env: NodeJS.ProcessEnv = process.env): PrivateStore {
+export function getPrivateStore(env: EnvLike = process.env): PrivateStore {
   if (!cached) cached = createPrivateStore(env)
   return cached
 }

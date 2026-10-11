@@ -61,7 +61,7 @@ async function main() {
   resetSemaphore()
   let passed = 0
 
-  const test = async (name: string, fn: () => Promise<void>) => {
+  const test = async (name: string, fn: () => void | Promise<void>) => {
     try {
       await fn()
       passed += 1
@@ -225,7 +225,7 @@ async function main() {
           GPSLongitudeRef: "E",
           GPSLongitude: "77/1 35/1 40/1",
         },
-      })
+      } as unknown as Parameters<ReturnType<typeof sharp>["withExifMerge"]>[0])
       .toBuffer()
 
     const source = await sharp(withExif).metadata()

@@ -1,7 +1,7 @@
 import { copyFile, mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { getR2PublicBase, hasR2Config } from "./config"
+import { getR2PublicBase, hasR2Config, type EnvLike } from "./config"
 import { resolvePrivateDir, type PrivateStore } from "./private-store"
 
 /**
@@ -26,7 +26,7 @@ const APPROVED_LOCAL_PREFIX = "uploads/gallery"
 const APPROVED_R2_PREFIX = "gallery/approved"
 
 /** `apps/web/public/...` — the directory the existing local upload path writes to. */
-export function resolvePublicDir(env: NodeJS.ProcessEnv = process.env): string {
+export function resolvePublicDir(env: EnvLike = process.env): string {
   return path.resolve(process.cwd(), "public")
 }
 
@@ -38,7 +38,7 @@ export async function promoteGalleryPhoto(
   privateStore: PrivateStore,
   eventId: string,
   photoId: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): Promise<PromotedMedia> {
   const key = keyFor(eventId, photoId)
   const { body, contentType } = await privateStore.get(key)
@@ -86,7 +86,7 @@ export async function promoteGalleryPhoto(
 
 export async function deletePromotedGalleryPhoto(
   promoted: PromotedMedia,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): Promise<void> {
   try {
     if (promoted.localPath) {
