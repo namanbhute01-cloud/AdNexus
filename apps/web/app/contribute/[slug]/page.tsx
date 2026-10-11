@@ -14,6 +14,9 @@ type Props = { params: Promise<{ slug: string }> }
  */
 export const metadata: Metadata = {
   title: "Share your photos",
+  // Overrides the CMS-wide description inherited from the root layout — this is
+  // a student-facing page, not an operator console.
+  description: "Upload your event photos to be shown on the campus screens after review.",
   robots: { index: false, follow: false, nocache: true },
 }
 
