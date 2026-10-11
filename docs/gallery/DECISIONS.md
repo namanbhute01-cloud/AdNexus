@@ -123,3 +123,20 @@ Each entry: decision · alternatives considered · reason. Recorded per INSTRUCT
 **Reason.** ARCHITECTURE §8.2 step 5 says "after commit: delete private full-size (keep thumb)". ARCHITECTURE §8.1's state machine requires `REMOVED ──approve──► APPROVED`, and INSTRUCTIONS T8's Done-when explicitly requires "remove then re-approve works". These two requirements are **mutually exclusive**: once the pending copy is deleted, the promoted copy is the only one, and re-approval has nothing to promote — the integration test failed with exactly this before the change.
 
 The state machine is an acceptance criterion and the storage rule is an optimisation, so the optimisation loses. Cost is bounded at roughly 1 MB per approved photo, which is irrelevant for a single event, and the RUNBOOK teardown step removes the whole directory.
+
+---
+
+## D13 — Local approved media is served by a route, not by `public/` *(fixes AUDIT F9)*
+
+**Decision.** Gallery-approved photos get `Media.url = "/media/uploads/gallery/<eventId>/<photoId>.jpg"`, served by the new public read-only `app/media/[...path]/route.ts` (local driver only). The R2 driver is unchanged — it already serves from the bucket's public URL.
+
+**Alternatives.**
+1. Keep `/${r2Key}` and instruct the operator to restart the server after every approval batch.
+2. Restart via a watcher after each write.
+3. Symlink `public/uploads` at a directory outside the project.
+
+**Reason.** T8/T9 integration testing proved that Next.js snapshots the `public/` directory when the **server starts** — a file written while the server is running returns 404 until the next restart. Option 1 is a non-starter for a live event: the admin approves a photo, the database and playlist update correctly, and the screen shows a broken image. Option 2 fights the framework. Option 3 depends on undocumented traversal behaviour.
+
+The route reads from disk per request, so it has no snapshot window. It is deliberately scoped to the approved-media prefix with a resolved-path containment check, a charset restriction and an extension allow-list, so it cannot be used to read `.env.local` or anything outside `public/uploads/` (verified against five traversal payloads). Pending photos live under `.data/gallery`, a different root, and are never reachable through it.
+
+**Known leftover.** The pre-existing CMS upload path (`app/api/media/route.ts`) still sets `url = "/${key}"` and therefore still has the F9 limitation. It is listed in AUDIT as an out-of-scope finding rather than changed, per INSTRUCTIONS rule 11. Switching it to the same `/media/` route is a one-line change if you want it.

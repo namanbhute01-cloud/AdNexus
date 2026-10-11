@@ -19,6 +19,8 @@ All paths are relative to the repo root. Every claim below is backed by a file/l
 | F6 | MEDIUM | `Campaign.status` is never consulted by the player — `/api/display/content:18` picks the active `ScreenAssignment` regardless of status. `ACTIVE` vs `DRAFT` is cosmetic for playback. `/api/campaigns/[id]/submit` sets `PENDING_REVIEW` and nothing ever advances it. |
 | F7 | LOW | No `.env.example` exists in the repo. |
 | F8 | LOW | `/api/media` `GET` returns **all** media rows to any authenticated user of any role (`:68-93`); the campaigner filter only narrows by EV access. With campaigner sign-in blocked in T10 this becomes admin-only. |
+| F9 | **BLOCKER** *(found during T8/T9 integration testing)* | **Next.js snapshots `public/` at server START, not at build.** A file written into `public/uploads/` while the server is running returns **404** until the next restart. Verified: a file created one second before the request 404s; the same file serves 200 after a restart. Consequence: the entire local-disk storage model is unreliable at runtime — including the CMS's own `/api/media/local-upload`. Gallery-approved photos are routed through `app/media/[...path]/route.ts` to avoid this (DECISIONS D13). **The pre-existing CMS upload path still has this limitation.** |
+| F10 | HIGH | `removePhoto` read the `Media` row *after* its transaction deleted it, so the promoted file was always orphaned on disk. Fixed in T8 and covered by a regression test. |
 
 ---
 

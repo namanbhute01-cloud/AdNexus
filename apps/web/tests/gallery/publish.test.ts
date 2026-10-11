@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { existsSync } from "node:fs"
 import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
@@ -36,10 +37,10 @@ async function seedPhoto(seed: number) {
     data: {
       eventId,
       status: "PENDING",
-      // `promoteGalleryPhoto` derives the quarantine key from `photo.id`, so the
-      // fixture must store at exactly that path or promotion cannot find it.
-      storageKey: `${eventId}/pending-placeholder.jpg`,
-      thumbKey: `${eventId}/pending-placeholder.thumb.jpg`,
+      // The upload route stores under a random UUID; promotion reads THIS key,
+      // so the fixture must exercise the real shape rather than a convenient one.
+      storageKey: `${eventId}/${seed}-${Math.random().toString(36).slice(2, 10)}.jpg`,
+      thumbKey: `${eventId}/${seed}-${Math.random().toString(36).slice(2, 10)}.thumb.jpg`,
       width: 320,
       height: 240,
       sizeBytes: buffer.length,
@@ -49,16 +50,8 @@ async function seedPhoto(seed: number) {
     },
   })
 
-  await prisma.galleryPhoto.update({
-    where: { id: photo.id },
-    data: {
-      storageKey: `${eventId}/${photo.id}.jpg`,
-      thumbKey: `${eventId}/${photo.id}.thumb.jpg`,
-    },
-  })
-
-  await store.put(`${eventId}/${photo.id}.jpg`, buffer, "image/jpeg")
-  await store.put(`${eventId}/${photo.id}.thumb.jpg`, buffer, "image/jpeg")
+  await store.put(photo.storageKey, buffer, "image/jpeg")
+  await store.put(photo.thumbKey, buffer, "image/jpeg")
   createdPhotoIds.push(photo.id)
   return photo
 }
@@ -203,6 +196,11 @@ describe("state machine", () => {
 
     const mediaLeft = await prisma.media.count({ where: { r2Key: { contains: `/${photo.id}.jpg` } } })
     assert.equal(mediaLeft, 0, "the orphaned Media row should be cleaned up")
+
+    // Regression: the file used to be orphaned on disk because the code read the
+    // Media row *after* the transaction had deleted it.
+    const promotedPath = path.join(process.cwd(), "public", "uploads", "gallery", eventId, `${photo.id}.jpg`)
+    assert.equal(existsSync(promotedPath), false, "the promoted file must be deleted from public/")
   })
 
   it("remove then re-approve works", async () => {
@@ -218,6 +216,15 @@ describe("state machine", () => {
 
     const playlist = await getPlaylistForCampaign(campaignId)
     assert.equal(playlist.some((item) => item.url.includes(`${photo.id}.jpg`)), true)
+
+    // Local-driver URLs must route through /media/ so they work without a
+    // restart. Next.js snapshots public/ at server start (AUDIT F11).
+    const entry = playlist.find((item) => item.url.includes(`${photo.id}.jpg`))
+    assert.ok(entry)
+    assert.ok(
+      entry.url.startsWith("/media/uploads/gallery/"),
+      `expected /media/uploads/gallery/ prefix, got ${entry.url}`,
+    )
 
     const media = await prisma.media.count({ where: { r2Key: { contains: `/${photo.id}.jpg` } } })
     assert.equal(media, 1, "re-approval must not leave a second Media row")

@@ -8,10 +8,15 @@ import { resolvePrivateDir, type PrivateStore } from "./private-store"
  * Promotion of an approved gallery photo into the *existing* media storage
  * location, so the player treats it like any other uploaded asset.
  *
- * The key is derived deterministically from the photo id, which is what makes
- * approval idempotent: a retried or concurrent approval writes the same object
- * and produces the same `Media.r2Key`, so the database unique index is the only
- * thing that has to arbitrate (see DECISIONS D3).
+ * The source is located by `photo.storageKey` — the key recorded on the row at
+ * upload time — rather than by re-deriving a filename from the photo id. Two
+ * reasons: the two can never drift apart, and the recorded key is stable, so a
+ * retried or concurrent approval writes the same bytes to the same destination.
+ * That stability is what makes approval idempotent at the storage layer; the
+ * database unique index on `Media.r2Key` is the backstop (see DECISIONS D3).
+ *
+ * The destination stays derived from the photo id, because that is what makes
+ * the *public* asset path stable across re-approval of the same photo.
  */
 export interface PromotedMedia {
   /** Value stored in `Media.r2Key` (unique). */
@@ -30,7 +35,7 @@ export function resolvePublicDir(env: EnvLike = process.env): string {
   return path.resolve(process.cwd(), "public")
 }
 
-function keyFor(eventId: string, photoId: string): string {
+function destinationKey(eventId: string, photoId: string): string {
   return `${eventId}/${photoId}.jpg`
 }
 
@@ -38,10 +43,11 @@ export async function promoteGalleryPhoto(
   privateStore: PrivateStore,
   eventId: string,
   photoId: string,
+  storageKey: string,
   env: EnvLike = process.env,
 ): Promise<PromotedMedia> {
-  const key = keyFor(eventId, photoId)
-  const { body, contentType } = await privateStore.get(key)
+  const key = destinationKey(eventId, photoId)
+  const { body, contentType } = await privateStore.get(storageKey)
 
   if (hasR2Config(env)) {
     const r2Key = `${APPROVED_R2_PREFIX}/${key}`
@@ -75,13 +81,23 @@ export async function promoteGalleryPhoto(
     throw new Error("Refusing to promote a file outside public/")
   }
   await mkdir(path.dirname(target), { recursive: true })
-  // Plain overwrite is correct here: the key is content-addressed by photo id
-  // and re-approval of the same photo must reproduce the same bytes.
-  await copyFile(path.join(resolvePrivateDir(env), key), target)
+  // Plain overwrite is correct here: the key is derived from the photo id and
+  // re-approval of the same photo must reproduce the same bytes.
+  const sourcePath = await resolvePrivateFile(env, storageKey)
+  await copyFile(sourcePath, target)
 
-  // Mirror `app/api/media/route.ts`: an `uploads/` key is served straight from
-  // `public/` by Next, so the URL is root-relative.
-  return { r2Key, url: `/${r2Key}`, localPath: target }
+  // Route through `/media/...`, NOT the bare `/${r2Key}` that
+  // `app/api/media/route.ts` uses. Next.js snapshots `public/` when the server
+  // starts, so a file written while the server is running 404s until the next
+  // restart — which would mean approved photos never reach the TVs mid-event.
+  // `app/media/[...path]/route.ts` reads from disk per request and has no such
+  // window (see AUDIT finding F11 and DECISIONS D13).
+  return { r2Key, url: `/media/${r2Key}`, localPath: target }
+}
+
+/** Absolute path of a quarantined file, for the local driver's copy step. */
+function resolvePrivateFile(env: EnvLike, storageKey: string): string {
+  return path.join(resolvePrivateDir(env), storageKey)
 }
 
 export async function deletePromotedGalleryPhoto(

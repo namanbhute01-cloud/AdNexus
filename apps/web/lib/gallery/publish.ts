@@ -74,9 +74,10 @@ export async function approvePhoto(photoId: string, adminId: string): Promise<Ap
   let promoted: Awaited<ReturnType<typeof promoteGalleryPhoto>> | null = null
 
   try {
-    // 2. Promote the private file into the public media location. Deterministic
-    //    key, so a retry overwrites the same bytes rather than duplicating.
-    promoted = await promoteGalleryPhoto(store, photo.eventId, photo.id)
+    // 2. Promote the quarantined file into the public media location. The
+    //    SOURCE is the key recorded on the row; the DESTINATION is derived from
+    //    the photo id, so re-approval reproduces the same public asset.
+    promoted = await promoteGalleryPhoto(store, photo.eventId, photo.id, photo.storageKey)
 
     // 3. Serialised transaction: advisory lock on the campaign, then order +
     //    Media + CampaignMedia + photo back-reference.
@@ -202,6 +203,15 @@ export async function removePhoto(photoId: string, adminId: string): Promise<Rem
   if (!photo) return { ok: false, error: "NOT_FOUND" }
   if (photo.status !== "APPROVED") return { ok: false, error: "NOT_FOUND" }
 
+  // Capture the promoted asset BEFORE the transaction deletes the Media row.
+  // Reading it afterwards returns null and silently orphans the file on disk.
+  const promotedFile = photo.mediaId
+    ? await prisma.media.findUnique({
+        where: { id: photo.mediaId },
+        select: { r2Key: true, url: true },
+      })
+    : null
+
   try {
     await prisma.$transaction(async (tx) => {
       // Detach from the campaign playlist first.
@@ -231,12 +241,15 @@ export async function removePhoto(photoId: string, adminId: string): Promise<Rem
     })
 
     // Promoted file cleanup is best-effort and outside the transaction.
-    if (photo.mediaId) {
-      const media = await prisma.media.findUnique({ where: { id: photo.mediaId }, select: { r2Key: true, url: true } })
-      if (media?.r2Key) {
-        const localPath = media.url.startsWith("/") ? `${process.cwd()}/public${media.url}` : null
-        await deletePromotedGalleryPhoto({ r2Key: media.r2Key, url: media.url, localPath })
-      }
+    if (promotedFile?.r2Key) {
+      const localPath = promotedFile.url.startsWith("/media/")
+        ? `${process.cwd()}/public${promotedFile.url.slice("/media".length)}`
+        : null
+      await deletePromotedGalleryPhoto({
+        r2Key: promotedFile.r2Key,
+        url: promotedFile.url,
+        localPath,
+      })
     }
 
     await notifyCampaignPlaylistChanged(photo.event.campaignId)
