@@ -22,6 +22,46 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        // Public upload page. `default-src 'self'` means nothing loads from a
+        // third party, and `img-src` allows only same-origin plus the blob:
+        // URLs used for the local photo previews.
+        source: "/contribute/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "img-src 'self' blob: data:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "connect-src 'self'",
+              "form-action 'self'",
+              "base-uri 'self'",
+              "frame-ancestors 'none'",
+              "object-src 'none'",
+            ].join("; "),
+          },
+        ],
+      },
+      {
+        // Ingestion endpoints return machine-readable codes and must never be
+        // cached by the phone, a proxy, or Cloudflare.
+        source: "/api/contribute/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

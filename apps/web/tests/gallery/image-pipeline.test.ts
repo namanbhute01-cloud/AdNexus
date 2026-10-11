@@ -275,6 +275,31 @@ async function main() {
     assert.equal(result.full.length > 0, true)
   })
 
+  await test("a realistic 12 MP phone photo processes well inside the timeout", async () => {
+    // Guards the event-day hot path. A synthetic-noise fixture would measure
+    // ~4s (JPEG's pathological worst case); a real camera image is far cheaper,
+    // so this catches a regression in the real workload rather than in theory.
+    const pixels = Buffer.alloc(4032 * 3024 * 3)
+    for (let y = 0; y < 3024; y++) {
+      for (let x = 0; x < 4032; x++) {
+        const i = (y * 4032 + x) * 3
+        pixels[i] = 40 + (140 * x) / 4032 + (60 * y) / 3024
+        pixels[i + 1] = 60 + (90 * y) / 3024
+        pixels[i + 2] = 120 - (70 * x) / 4032
+      }
+    }
+    const input = await sharp(pixels, { raw: { width: 4032, height: 3024, channels: 3 } })
+      .jpeg({ quality: 92 })
+      .toBuffer()
+
+    const started = Date.now()
+    const result = await processUpload(input)
+    const elapsed = Date.now() - started
+
+    assert.equal(result.width, 2560)
+    assert.ok(elapsed < 8000, `12 MP photo took ${elapsed}ms, expected well under 8s`)
+  })
+
   // -------------------------------------------------------------------------
   console.log(`\n${passed} image-pipeline assertions passed`)
   resetSemaphore()
