@@ -22,17 +22,18 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  if (session.user.role === "ADMIN") {
-    redirect("/admin");
-  }
+  // Only ADMIN sessions can exist now (INSTRUCTIONS T10), so any session that
+  // reaches this layout belongs in the admin console. The CAMPAIGNER role and
+  // its rows still exist in the database — they simply cannot sign in.
+  redirect("/admin");
 
   return (
     <PortalShell
       appName="VAART-E"
       title="Campaigner Console"
       subtitle="Read-only portal for assigned campaigns, display status, and currently displayed content."
-      userName={session.user.name ?? "Campaigner"}
-      userRole={session.user.role}
+      userName={session?.user.name ?? "Admin"}
+      userRole={session?.user.role ?? "ADMIN"}
       tone="campaigner"
       navLinks={navLinks}
     >

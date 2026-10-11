@@ -16,7 +16,9 @@ export default auth((req) => {
   }
 
   if (isLoginPage && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    // Only ADMIN sessions can exist (see auth.ts `authorize`), so the admin
+    // console is the only sensible landing page.
+    return NextResponse.redirect(new URL("/admin", nextUrl));
   }
 
   return NextResponse.next();

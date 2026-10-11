@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
   Film,
   Grid3X3,
+  Images,
   LayoutDashboard,
   LogOut,
   Monitor,
@@ -25,7 +26,8 @@ type IconName =
   | "assignments"
   | "settings"
   | "media"
-  | "screens";
+  | "screens"
+  | "gallery";
 
 type NavLink = {
   href: string;
@@ -53,6 +55,7 @@ const iconMap = {
   settings: Settings,
   media: Upload,
   screens: Radio,
+  gallery: Images,
 } satisfies Record<IconName, typeof LayoutDashboard>;
 
 const toneMap = {
