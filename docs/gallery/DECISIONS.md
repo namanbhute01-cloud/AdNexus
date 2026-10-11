@@ -109,3 +109,17 @@ Each entry: decision · alternatives considered · reason. Recorded per INSTRUCT
 **Decision.** Single-process sliding window in `apps/web/lib/gallery/rate-limit.ts`, matching ARCHITECTURE §7.3.
 
 **Reason.** Event deployment is one Node process. Documented in RUNBOOK as a known limitation if the app is ever scaled horizontally.
+
+---
+
+## D12 — The quarantined full-size is RETAINED after approval *(deviation from ARCHITECTURE §8.2)*
+
+**Decision.** `approvePhoto` does **not** delete the private full-size file after a successful commit. It is deleted only by post-event teardown.
+
+**Alternatives.**
+1. Follow §8.2 literally: delete the pending copy on approval, and accept that `REMOVED → APPROVED` no longer works.
+2. Keep only the thumbnail, and re-derive the full-size from it on re-approval (quality loss — a 480px thumb is not a display asset).
+
+**Reason.** ARCHITECTURE §8.2 step 5 says "after commit: delete private full-size (keep thumb)". ARCHITECTURE §8.1's state machine requires `REMOVED ──approve──► APPROVED`, and INSTRUCTIONS T8's Done-when explicitly requires "remove then re-approve works". These two requirements are **mutually exclusive**: once the pending copy is deleted, the promoted copy is the only one, and re-approval has nothing to promote — the integration test failed with exactly this before the change.
+
+The state machine is an acceptance criterion and the storage rule is an optimisation, so the optimisation loses. Cost is bounded at roughly 1 MB per approved photo, which is irrelevant for a single event, and the RUNBOOK teardown step removes the whole directory.

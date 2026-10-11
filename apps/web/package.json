@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
-    "test:gallery": "tsx --test tests/gallery/*.test.ts"
+    "test:gallery": "tsx --import ./tests/gallery/env.ts --test tests/gallery/private-store.test.ts tests/gallery/guards.test.ts tests/gallery/publish.test.ts",
+    "test:gallery:pipeline": "tsx tests/gallery/image-pipeline.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1041.0",

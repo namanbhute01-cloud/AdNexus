@@ -68,21 +68,31 @@
     const audioGate = document.getElementById('audio-gate')
     const audioGateBtn = document.getElementById('audio-gate-btn')
 
+    // DECISIONS D1 (docs/gallery/DECISIONS.md): the display shell used to fetch
+    // the playlist once at startup, so an approved Community Gallery photo would
+    // never appear unless Pusher happened to be configured. Poll instead, and
+    // only reload playback when the playlist actually changed.
+    let lastFingerprint = null
+
     async function fetchContent() {
       try {
         const res = await fetch(`${API_BASE}/api/display/content`, {
           headers: {
             'X-Serial': SERIAL,
             'X-SubSerial': SUB_SERIAL,
-          }
+          },
+          cache: 'no-store'
         })
         if (!res.ok) { showLogo(); return }
         const data = await res.json()
-        if (data.playlist && data.playlist.length > 0) {
-          loadPlaylist(data.playlist)
-        } else {
-          showLogo()
-        }
+        const items = (data.playlist && data.playlist.length > 0) ? data.playlist : []
+        const fingerprint = items.map((i) => i.id).join(',')
+
+        if (fingerprint === lastFingerprint) return
+        lastFingerprint = fingerprint
+
+        if (items.length > 0) loadPlaylist(items)
+        else showLogo()
       } catch (e) {
         showLogo()
       }
@@ -93,11 +103,13 @@
 
     channel.bind('content-update', (data) => {
       statusEl.textContent = 'Content updated'
+      lastFingerprint = (data.playlist || []).map((i) => i.id).join(',')
       loadPlaylist(data.playlist)
     })
 
     channel.bind('clear-content', () => {
       playlist = []
+      lastFingerprint = ''
       showLogo()
     })
 
@@ -245,6 +257,10 @@
 
     fetchContent()
     sendHeartbeat()
+    setInterval(fetchContent, 15 * 1000)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchContent()
+    })
     setInterval(sendHeartbeat, 60 * 1000)
     setTimeout(() => location.reload(), 6 * 60 * 60 * 1000)
     function unlockAudio() {

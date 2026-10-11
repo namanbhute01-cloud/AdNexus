@@ -18,9 +18,7 @@ import { TOKEN_TTL_MS, signToken, verifyToken } from "@/lib/gallery/upload-token
 
 // Read lazily by requireGalleryEnv(), so setting these before the first `it()`
 // body runs is enough — no import-order race.
-process.env.GALLERY_TOKEN_SECRET = "a".repeat(32)
-process.env.GALLERY_IP_SALT = "b".repeat(32)
-process.env.PUBLIC_BASE_URL = "https://gallery.example.test"
+
 
 describe("upload tokens", () => {
   it("round-trips a valid token", () => {

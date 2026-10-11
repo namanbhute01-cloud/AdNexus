@@ -20,6 +20,17 @@ type PlaylistItem = {
 
 const DUCKED_AMBIENT_VOLUME = 0.2;
 
+/**
+ * How often to re-fetch the playlist when Pusher is not pushing.
+ *
+ * T0 (docs/gallery/AUDIT.md, finding F1) proved the player previously fetched
+ * the playlist exactly once on mount, so an approved Community Gallery photo
+ * would never reach a screen unless Pusher happened to be configured. Polling
+ * is the fallback floor; when Pusher is configured the push still arrives
+ * first and this just re-syncs. See DECISIONS D1.
+ */
+const CONTENT_POLL_MS = 15_000;
+
 export function DevicePlayer() {
   const params = useSearchParams();
   const serial = params.get("serial");
@@ -31,6 +42,7 @@ export function DevicePlayer() {
   const ambientMediaRef = useRef<HTMLMediaElement | null>(null);
   const primaryMediaRef = useRef<HTMLMediaElement | null>(null);
   const [audioUnlockNeeded, setAudioUnlockNeeded] = useState(false);
+  const lastPlaylistRef = useRef<string | null>(null);
 
   const channelName = useMemo(
     () => (serial && subSerial ? `tv-${serial}-${subSerial}` : null),
@@ -70,6 +82,7 @@ export function DevicePlayer() {
             "X-Serial": serialValue,
             "X-SubSerial": subSerialValue,
           },
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -78,17 +91,40 @@ export function DevicePlayer() {
         }
 
         const data = await response.json();
-        if (!cancelled) {
-          setPlaylist(data.playlist ?? []);
+        if (cancelled) return;
+
+        const next: PlaylistItem[] = data.playlist ?? [];
+
+        // Only reset playback when the playlist actually changed. Without this
+        // guard the poll would restart the current image every 15 seconds.
+        const fingerprint = next.map((item) => item.id).join(",");
+        if (fingerprint !== lastPlaylistRef.current) {
+          lastPlaylistRef.current = fingerprint;
+          setPlaylist(next);
           setPrimaryIndex(0);
-          setStatus(`Connected · ${subSerialValue}`);
         }
+
+        setStatus((current) =>
+          current.startsWith("Connected") || current.startsWith("Live")
+            ? current
+            : `Connected · ${subSerialValue}`,
+        );
       } catch {
         if (!cancelled) setStatus("Connection failed");
       }
     }
 
     fetchContent();
+
+    // DECISIONS D1 — this is the change T0 proved necessary.
+    const poll = setInterval(fetchContent, CONTENT_POLL_MS);
+
+    // A TV that was asleep/asleep-tab should catch up immediately on wake.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchContent();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     const heartbeat = setInterval(() => {
       fetch(`${baseUrl}/api/display/heartbeat`, {
         method: "POST",
@@ -103,7 +139,9 @@ export function DevicePlayer() {
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
       clearInterval(heartbeat);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [baseUrl, serial, subSerial]);
 
@@ -121,12 +159,15 @@ export function DevicePlayer() {
     const channel = pusher.subscribe(channelName);
 
     channel.bind("content-update", (data: { playlist: PlaylistItem[] }) => {
-      setPlaylist(data.playlist ?? []);
+      const next = data.playlist ?? [];
+      lastPlaylistRef.current = next.map((item) => item.id).join(",");
+      setPlaylist(next);
       setPrimaryIndex(0);
       setStatus(`Live update · ${subSerial}`);
     });
 
     channel.bind("clear-content", () => {
+      lastPlaylistRef.current = "";
       setPlaylist([]);
       setPrimaryIndex(0);
       setStatus("Playlist cleared");
